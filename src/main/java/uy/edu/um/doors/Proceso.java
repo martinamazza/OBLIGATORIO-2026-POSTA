@@ -3,7 +3,8 @@ package uy.edu.um.doors;
 import uy.edu.um.tad.list.MyLinkedListImpl;
 import uy.edu.um.tad.list.MyList;
 
-public class Proceso {
+public class Proceso implements Comparable<Proceso> {
+
     private int PID;
     private String nombre;
     private Usuario usuario;
@@ -49,5 +50,10 @@ public class Proceso {
 
     public MyList<Evento> getEventos() {
         return eventos;
+    }
+
+    @Override
+    public int compareTo(Proceso otro) {
+        return Integer.compare(otro.getPrioridad(), this.getPrioridad());
     }
 }

@@ -4,9 +4,11 @@ import uy.edu.um.tad.hash.MyHash;
 import uy.edu.um.tad.hash.MyHashImpl;
 import uy.edu.um.tad.heap.MyHeap;
 import uy.edu.um.tad.heap.MyHeapImpl;
+import uy.edu.um.tad.list.MyList;
 import uy.edu.um.tad.queue.EmptyQueueException;
 import uy.edu.um.tad.queue.MyQueue;
 import uy.edu.um.tad.queue.MyQueueImpl;
+import uy.edu.um.tad.stack.EmptyStackException;
 import uy.edu.um.tad.stack.MyStack;
 import uy.edu.um.tad.stack.MyStackImpl;
 
@@ -24,6 +26,7 @@ public class ProcessManagerImpl implements ProcessManager{
     private Proceso enEjecucion;
     private MyStack<Proceso> finalizados;
     private MyHash<Integer, Usuario> usuarios;
+    private static final int MAX_CAPACITY_FINISHED = 3;
 
     private BufferedWriter log;
 
@@ -51,6 +54,7 @@ public class ProcessManagerImpl implements ProcessManager{
             System.out.println("Error escribiendo en el log: " + e.getMessage());
         }
     }
+
 
     @Override
     public void loadProcessAndUserData(String processCsvPath, String usersCsvPath) {
@@ -178,22 +182,138 @@ public class ProcessManagerImpl implements ProcessManager{
 
     @Override
     public void executeNextProcess() {
-        System.out.println("IMPLEMENTAR");
+        if(enEjecucion != null){
+            System.out.println("Ya hay un proceso en ejecucion: PID=" + enEjecucion.getPID());
+            return ;
+        }
+        if(pendientes.isEmpty()){
+            System.out.println("No hay procesos pendientes");
+            return ;
+        }
+        //Agarramos el proceso con mayor prioridad
+        Proceso procesoEjecutar = pendientes.remove();
+        procesoEjecutar.setEstado(EstadoProceso.RUNNING);
+        enEjecucion = procesoEjecutar;
+        logExecutingProcess(procesoEjecutar);
+    }
+
+    //Metodo auxiliar para escribir el proceso que se ejecuta
+    private void logExecutingProcess(Proceso p) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[").append(getCurrentTimestamp()).append("]: EXECUTING PROCESS: ")
+                .append("PID=").append(p.getPID())
+                .append(" | USER:").append(p.getUsuario().getAlias())
+                .append(" UID:").append(p.getUsuario().getUID());
+        escribirLog(sb.toString());
+
+        MyList<Evento> eventos = p.getEventos();
+        for (int i = 0; i < eventos.size(); i++) {
+            Evento evento = eventos.get(i);
+            StringBuilder eventLine = new StringBuilder();
+            eventLine.append(" EVENT: ").append(evento.getTipo())
+                    .append(" | Instructions [");
+
+            MyList<String> instrucciones = evento.getInstrucciones();
+            for (int j = 0; j < instrucciones.size(); j++) {
+                eventLine.append(instrucciones.get(j));
+                if (j < instrucciones.size() - 1) eventLine.append(", ");
+            }
+            eventLine.append("]");
+            escribirLog(eventLine.toString());
+        }
+    }
+    private String getCurrentTimestamp() {
+        return java.time.LocalDateTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
     @Override
     public void finishProcessOk() {
-        System.out.println("IMPLEMENTAR");
+        //Verificamos que haya un proceso en ejecucion
+        if(enEjecucion==null){
+            System.out.println("No hay proceos en ejecucion");
+            return;
+        }
+        enEjecucion.setEstado(EstadoProceso.FINISHED);
+        enEjecucion.setTipoFinalizacion(TipoFinalizacion.OK);
+
+        //Escribo en el log
+        String mensaje = "[" + getCurrentTimestamp() + "]: ENDING PROCESS: PID=" + enEjecucion.getPID() + " | STATE: " + enEjecucion.getTipoFinalizacion();
+        escribirLog(mensaje);
+
+        //Chequeamos si la pila esta llena, y si lo esta la vacio
+        if(finalizados.size()== MAX_CAPACITY_FINISHED){
+            escribirLog("[" + getCurrentTimestamp() + "]: Finished process stack overflow");
+            while(!finalizados.isEmpty()){
+                try {
+                    Proceso p = finalizados.pop();
+                    String procesoLog = "PID=" + p.getPID() + " " + p.getNombre() + " | STATE: " + p.getTipoFinalizacion() + " | USER:" + p.getUsuario().getAlias() + " UID:" + p.getUsuario().getUID();
+                    escribirLog(procesoLog);
+                } catch (EmptyStackException e) {
+                    break;
+                }
+            }
+        }
+        finalizados.push(enEjecucion);
+        enEjecucion=null;
     }
 
     @Override
     public void finishProcessError() {
-        System.out.println("IMPLEMENTAR");
+
+        if(enEjecucion==null){
+            System.out.println("No hay proceos en ejecucion");
+            return;
+        }
+        enEjecucion.setEstado(EstadoProceso.FINISHED);
+        enEjecucion.setTipoFinalizacion(TipoFinalizacion.ERROR);
+
+        String mensaje = "[" + getCurrentTimestamp() + "]: ENDING PROCESS: PID=" + enEjecucion.getPID() + " | STATE: " + enEjecucion.getTipoFinalizacion();
+        escribirLog(mensaje);
+        if(finalizados.size()== MAX_CAPACITY_FINISHED){
+            escribirLog("[" + getCurrentTimestamp() + "]: Finished process stack overflow");
+            while(!finalizados.isEmpty()){
+                try {
+                    Proceso p = finalizados.pop();
+                    String procesoLog = "PID=" + p.getPID() + " " + p.getNombre() + " | STATE: " + p.getTipoFinalizacion() + " | USER:" + p.getUsuario().getAlias() + " UID:" + p.getUsuario().getUID();
+                    escribirLog(procesoLog);
+                } catch (EmptyStackException e) {
+                    break;
+                }
+            }
+        }
+        finalizados.push(enEjecucion);
+        enEjecucion=null;
+
     }
 
     @Override
     public void terminateProcess(int uid) {
-        System.out.println("IMPLEMENTAR");
+
+        if(enEjecucion==null){
+            System.out.println("No hay proceos en ejecucion");
+            return;
+        }
+        enEjecucion.setEstado(EstadoProceso.FINISHED);
+        enEjecucion.setTipoFinalizacion(TipoFinalizacion.TERMINATED);
+
+        String mensaje = "[" + getCurrentTimestamp() + "]: ENDING PROCESS: PID=" + enEjecucion.getPID() + " | STATE: " + enEjecucion.getTipoFinalizacion();
+        escribirLog(mensaje);
+
+        if(finalizados.size()== MAX_CAPACITY_FINISHED){
+            escribirLog("[" + getCurrentTimestamp() + "]: Finished process stack overflow");
+            while(!finalizados.isEmpty()){
+                try {
+                    Proceso p = finalizados.pop();
+                    String procesoLog = "PID=" + p.getPID() + " " + p.getNombre() + " | STATE: " + p.getTipoFinalizacion() + " | USER:" + p.getUsuario().getAlias() + " UID:" + p.getUsuario().getUID();
+                    escribirLog(procesoLog);
+                } catch (EmptyStackException e) {
+                    break;
+                }
+            }
+        }
+        finalizados.push(enEjecucion);
+        enEjecucion=null;
     }
 
     @Override

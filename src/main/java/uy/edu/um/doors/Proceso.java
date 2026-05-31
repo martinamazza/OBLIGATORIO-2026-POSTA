@@ -36,6 +36,15 @@ public class Proceso implements Comparable<Proceso> {
         return prioridad;
     }
 
+    public TipoFinalizacion getTipoFinalizacion() {
+        return tipoFinalizacion;
+    }
+
+    public void setTipoFinalizacion(TipoFinalizacion tipoFinalizacion) {
+        this.tipoFinalizacion = tipoFinalizacion;
+    }
+    private TipoFinalizacion tipoFinalizacion;
+
     public void setPrioridad(int prioridad) {
         this.prioridad = prioridad;
     }

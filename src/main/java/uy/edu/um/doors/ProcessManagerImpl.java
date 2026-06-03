@@ -17,7 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-public class ProcessManagerImpl implements ProcessManager{
+public class ProcessManagerImpl implements ProcessManager {
 
     //EL DISEÑO DE LA ESTRUCTURA DE ALMACENAMIENTO DEBE IMPLEMENTARSE EN ESTA CLASE EN RELACIÓN CON LAS ENTIDADES QUE DEFINA
 
@@ -27,12 +27,13 @@ public class ProcessManagerImpl implements ProcessManager{
     private MyStack<Proceso> finalizados;
     private MyHash<Integer, Usuario> usuarios;
     private static final int MAX_CAPACITY_FINISHED = 3;
+    private MyHash<Integer, Proceso> todosProcesos;
 
     private BufferedWriter log;
 
     public ProcessManagerImpl() {
         this.colaNuevos = new MyQueueImpl<>();
-        this.pendientes = new MyHeapImpl<>();
+        this.pendientes = new MyHeapImpl<>(false); //Ponemos falso porque queremos que sea HeapMax
         this.finalizados = new MyStackImpl<>();
         this.usuarios = new MyHashImpl<>();
         this.enEjecucion = null;
@@ -42,6 +43,7 @@ public class ProcessManagerImpl implements ProcessManager{
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        this.todosProcesos = new MyHashImpl<>();
     }
 
     //Metodo auxiliar
@@ -90,6 +92,7 @@ public class ProcessManagerImpl implements ProcessManager{
                 String eventosStr = partes[3];
                 extraerEventos(eventosStr, proceso);
                 colaNuevos.enqueue(proceso);
+                todosProcesos.put(pid, proceso);
             }
             readerProcesos.close();
         } catch (Exception e) {
@@ -130,7 +133,7 @@ public class ProcessManagerImpl implements ProcessManager{
 
         //Calculamos la prioridad de cada proceso en la cola de nuevos procesos
 
-        while (! colaNuevos.isEmpty()){
+        while (!colaNuevos.isEmpty()) {
 
             try {
                 Proceso procesoActual = colaNuevos.dequeue();
@@ -141,14 +144,12 @@ public class ProcessManagerImpl implements ProcessManager{
                 int contadorDISK = 0;
 
 
-                for(int i =0; i< procesoActual.getEventos().size(); i++){
-                    if( procesoActual.getEventos().get(i).getTipo() == TipoEvento.CPU ){
+                for (int i = 0; i < procesoActual.getEventos().size(); i++) {
+                    if (procesoActual.getEventos().get(i).getTipo() == TipoEvento.CPU) {
                         contadorCPU++;
-                    }
-                    else if( procesoActual.getEventos().get(i).getTipo() == TipoEvento.RAM){
+                    } else if (procesoActual.getEventos().get(i).getTipo() == TipoEvento.RAM) {
                         contadorRAM++;
-                    }
-                    else{
+                    } else {
                         contadorDISK++;
                     }
                 }
@@ -157,13 +158,12 @@ public class ProcessManagerImpl implements ProcessManager{
                 Usuario usuarioAsociado = procesoActual.getUsuario();
                 int peso = 0;
 
-                if(usuarioAsociado.getTipo() == TipoUsuario.ADMIN){
+                if (usuarioAsociado.getTipo() == TipoUsuario.ADMIN) {
                     peso = 32;
-                }
-                else {
+                } else {
                     peso = 16;
                 }
-                int prioridad = ( (8*contadorCPU + 2*contadorRAM + 2*contadorDISK)/total ) + (peso * total);
+                int prioridad = ((8 * contadorCPU + 2 * contadorRAM + 2 * contadorDISK) / total) + (peso * total);
 
                 procesoActual.setPrioridad(prioridad);
                 procesoActual.setEstado(EstadoProceso.PENDING);
@@ -182,13 +182,13 @@ public class ProcessManagerImpl implements ProcessManager{
 
     @Override
     public void executeNextProcess() {
-        if(enEjecucion != null){
+        if (enEjecucion != null) {
             System.out.println("Ya hay un proceso en ejecucion: PID=" + enEjecucion.getPID());
-            return ;
+            return;
         }
-        if(pendientes.isEmpty()){
+        if (pendientes.isEmpty()) {
             System.out.println("No hay procesos pendientes");
-            return ;
+            return;
         }
         //Agarramos el proceso con mayor prioridad
         Proceso procesoEjecutar = pendientes.remove();
@@ -222,6 +222,7 @@ public class ProcessManagerImpl implements ProcessManager{
             escribirLog(eventLine.toString());
         }
     }
+
     private String getCurrentTimestamp() {
         return java.time.LocalDateTime.now()
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
@@ -230,7 +231,7 @@ public class ProcessManagerImpl implements ProcessManager{
     @Override
     public void finishProcessOk() {
         //Verificamos que haya un proceso en ejecucion
-        if(enEjecucion==null){
+        if (enEjecucion == null) {
             System.out.println("No hay proceos en ejecucion");
             return;
         }
@@ -242,11 +243,12 @@ public class ProcessManagerImpl implements ProcessManager{
         escribirLog(mensaje);
 
         //Chequeamos si la pila esta llena, y si lo esta la vacio
-        if(finalizados.size()== MAX_CAPACITY_FINISHED){
+        if (finalizados.size() == MAX_CAPACITY_FINISHED) {
             escribirLog("[" + getCurrentTimestamp() + "]: Finished process stack overflow");
-            while(!finalizados.isEmpty()){
+            while (!finalizados.isEmpty()) {
                 try {
                     Proceso p = finalizados.pop();
+                    todosProcesos.remove(p.getPID());
                     String procesoLog = "PID=" + p.getPID() + " " + p.getNombre() + " | STATE: " + p.getTipoFinalizacion() + " | USER:" + p.getUsuario().getAlias() + " UID:" + p.getUsuario().getUID();
                     escribirLog(procesoLog);
                 } catch (EmptyStackException e) {
@@ -255,13 +257,13 @@ public class ProcessManagerImpl implements ProcessManager{
             }
         }
         finalizados.push(enEjecucion);
-        enEjecucion=null;
+        enEjecucion = null;
     }
 
     @Override
     public void finishProcessError() {
 
-        if(enEjecucion==null){
+        if (enEjecucion == null) {
             System.out.println("No hay proceos en ejecucion");
             return;
         }
@@ -270,11 +272,12 @@ public class ProcessManagerImpl implements ProcessManager{
 
         String mensaje = "[" + getCurrentTimestamp() + "]: ENDING PROCESS: PID=" + enEjecucion.getPID() + " | STATE: " + enEjecucion.getTipoFinalizacion();
         escribirLog(mensaje);
-        if(finalizados.size()== MAX_CAPACITY_FINISHED){
+        if (finalizados.size() == MAX_CAPACITY_FINISHED) {
             escribirLog("[" + getCurrentTimestamp() + "]: Finished process stack overflow");
-            while(!finalizados.isEmpty()){
+            while (!finalizados.isEmpty()) {
                 try {
                     Proceso p = finalizados.pop();
+                    todosProcesos.remove(p.getPID());
                     String procesoLog = "PID=" + p.getPID() + " " + p.getNombre() + " | STATE: " + p.getTipoFinalizacion() + " | USER:" + p.getUsuario().getAlias() + " UID:" + p.getUsuario().getUID();
                     escribirLog(procesoLog);
                 } catch (EmptyStackException e) {
@@ -283,14 +286,14 @@ public class ProcessManagerImpl implements ProcessManager{
             }
         }
         finalizados.push(enEjecucion);
-        enEjecucion=null;
+        enEjecucion = null;
 
     }
 
     @Override
     public void terminateProcess(int uid) {
 
-        if(enEjecucion==null){
+        if (enEjecucion == null) {
             System.out.println("No hay proceos en ejecucion");
             return;
         }
@@ -300,11 +303,12 @@ public class ProcessManagerImpl implements ProcessManager{
         String mensaje = "[" + getCurrentTimestamp() + "]: ENDING PROCESS: PID=" + enEjecucion.getPID() + " | STATE: " + enEjecucion.getTipoFinalizacion();
         escribirLog(mensaje);
 
-        if(finalizados.size()== MAX_CAPACITY_FINISHED){
+        if (finalizados.size() == MAX_CAPACITY_FINISHED) {
             escribirLog("[" + getCurrentTimestamp() + "]: Finished process stack overflow");
-            while(!finalizados.isEmpty()){
+            while (!finalizados.isEmpty()) {
                 try {
                     Proceso p = finalizados.pop();
+                    todosProcesos.remove(p.getPID());
                     String procesoLog = "PID=" + p.getPID() + " " + p.getNombre() + " | STATE: " + p.getTipoFinalizacion() + " | USER:" + p.getUsuario().getAlias() + " UID:" + p.getUsuario().getUID();
                     escribirLog(procesoLog);
                 } catch (EmptyStackException e) {
@@ -313,26 +317,166 @@ public class ProcessManagerImpl implements ProcessManager{
             }
         }
         finalizados.push(enEjecucion);
-        enEjecucion=null;
+        enEjecucion = null;
     }
 
     @Override
     public void printStatus() {
-        System.out.println("IMPLEMENTAR");
+        System.out.println("PROCESS STATUS");
+
+        System.out.println("EXECUTING:");
+        if (enEjecucion != null) {
+            System.out.println("PID=" + enEjecucion.getPID() + " | " + enEjecucion.getNombre()
+                    + " | USER:" + enEjecucion.getUsuario().getAlias()
+                    + " UID:" + enEjecucion.getUsuario().getUID()
+                    + " | P=" + enEjecucion.getPrioridad());
+        } else {
+            System.out.println("  None");
+        }
+
+        MyList<Proceso> todos = todosProcesos.values();
+
+        System.out.println("PENDING:");
+        for (int i = 0; i < todos.size(); i++) {
+            Proceso p = todos.get(i);
+            if (p.getEstado() == EstadoProceso.PENDING) {
+                System.out.println("PID=" + p.getPID() + " | " + p.getNombre()
+                        + " | USER:" + p.getUsuario().getAlias()
+                        + " UID:" + p.getUsuario().getUID()
+                        + " | P=" + p.getPrioridad());
+            }
+        }
+
+        System.out.println("FINISHED:");
+        for (int i = 0; i < todos.size(); i++) {
+            Proceso p = todos.get(i);
+            if (p.getEstado() == EstadoProceso.FINISHED) {
+                System.out.println("PID=" + p.getPID() + " " + p.getNombre()
+                        + " | STATE: " + p.getTipoFinalizacion()
+                        + " | USER:" + p.getUsuario().getAlias()
+                        + " UID:" + p.getUsuario().getUID());
+            }
+        }
     }
 
     @Override
     public void printStatusVerbose() {
-        System.out.println("IMPLEMENTAR");
+        System.out.println("PROCESS STATUS (VERBOSE)");
+
+        System.out.println("EXECUTING:");
+        if (enEjecucion != null) {
+            System.out.println("PID=" + enEjecucion.getPID() + " | " + enEjecucion.getNombre()
+                    + " | USER:" + enEjecucion.getUsuario().getAlias()
+                    + " UID:" + enEjecucion.getUsuario().getUID()
+                    + " | P=" + enEjecucion.getPrioridad());
+            for (int i = 0; i < enEjecucion.getEventos().size(); i++) {
+                Evento e = enEjecucion.getEventos().get(i);
+                System.out.print("  EVENT: " + e.getTipo() + " [");
+                for (int j = 0; j < e.getInstrucciones().size(); j++) {
+                    System.out.print(e.getInstrucciones().get(j));
+                    if (j < e.getInstrucciones().size() - 1) System.out.print(", ");
+                }
+                System.out.println("]");
+            }
+        } else {
+            System.out.println("  None");
+        }
+
+        MyList<Proceso> todos = todosProcesos.values();
+
+        System.out.println("PENDING:");
+        for (int i = 0; i < todos.size(); i++) {
+            Proceso p = todos.get(i);
+            if (p.getEstado() == EstadoProceso.PENDING) {
+                System.out.println("PID=" + p.getPID() + " | " + p.getNombre()
+                        + " | USER:" + p.getUsuario().getAlias()
+                        + " UID:" + p.getUsuario().getUID()
+                        + " | P=" + p.getPrioridad());
+                for (int j = 0; j < p.getEventos().size(); j++) {
+                    Evento e = p.getEventos().get(j);
+                    System.out.print("  EVENT: " + e.getTipo() + " [");
+                    for (int k = 0; k < e.getInstrucciones().size(); k++) {
+                        System.out.print(e.getInstrucciones().get(k));
+                        if (k < e.getInstrucciones().size() - 1) System.out.print(", ");
+                    }
+                    System.out.println("]");
+                }
+            }
+        }
+
+        System.out.println("FINISHED:");
+        for (int i = 0; i < todos.size(); i++) {
+            Proceso p = todos.get(i);
+            if (p.getEstado() == EstadoProceso.FINISHED) {
+                System.out.println("PID=" + p.getPID() + " " + p.getNombre()
+                        + " | STATE: " + p.getTipoFinalizacion()
+                        + " | USER:" + p.getUsuario().getAlias()
+                        + " UID:" + p.getUsuario().getUID());
+                for (int j = 0; j < p.getEventos().size(); j++) {
+                    Evento e = p.getEventos().get(j);
+                    System.out.print("  EVENT: " + e.getTipo() + " [");
+                    for (int k = 0; k < e.getInstrucciones().size(); k++) {
+                        System.out.print(e.getInstrucciones().get(k));
+                        if (k < e.getInstrucciones().size() - 1) System.out.print(", ");
+                    }
+                    System.out.println("]");
+                }
+            }
+        }
     }
 
     @Override
     public void printStatusByUser(int uid) {
-        System.out.println("IMPLEMENTAR");
+        System.out.println("PROCESS STATUS - USER UID:" + uid);
+        MyList<Proceso> todos = todosProcesos.values();
+
+        if (!usuarios.contains(uid)) {
+            System.out.println("El usuario ingresado no existe");
+            return;
+        }
+
+        for (int i = 0; i < todos.size(); i++) {
+            Proceso p = todos.get(i);
+            if (p.getUsuario().getUID() == uid) {
+                System.out.println("PID=" + p.getPID() + " | " + p.getNombre()
+                        + " | STATE: " + p.getEstado()
+                        + " | USER:" + p.getUsuario().getAlias()
+                        + " UID:" + p.getUsuario().getUID()
+                        + " | P=" + p.getPrioridad());
+                for (int j = 0; j < p.getEventos().size(); j++) {
+                    Evento e = p.getEventos().get(j);
+                    System.out.print("  EVENT: " + e.getTipo() + " [");
+                    for (int k = 0; k < e.getInstrucciones().size(); k++) {
+                        System.out.print(e.getInstrucciones().get(k));
+                        if (k < e.getInstrucciones().size() - 1) System.out.print(", ");
+                    }
+                    System.out.println("]");
+                }
+            }
+        }
     }
 
     @Override
     public void printStatusByProcess(int pid) {
-        System.out.println("IMPLEMENTAR");
+        if (!todosProcesos.contains(pid)) {
+            System.out.println("El proceso ingresado no existe en memoria");
+            return;
+        }
+
+        Proceso p = todosProcesos.get(pid);
+                System.out.println("PID=" + p.getPID() + " | " + p.getNombre()
+                        + " | STATE: " + p.getEstado()
+                        + " | USER:" + p.getUsuario().getAlias()
+                        + " UID:" + p.getUsuario().getUID()
+                        + " | P=" + p.getPrioridad());
+                for (int j = 0; j < p.getEventos().size(); j++) {
+                    Evento e = p.getEventos().get(j);
+                    System.out.print("  EVENT: " + e.getTipo() + " [");
+                    for (int k = 0; k < e.getInstrucciones().size(); k++) {
+                        System.out.print(e.getInstrucciones().get(k));
+                        if (k < e.getInstrucciones().size() - 1) System.out.print(", ");
+                    }
+                    System.out.println("]");
+                }
     }
-}
+ }

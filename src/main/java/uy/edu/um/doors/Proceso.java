@@ -11,6 +11,7 @@ public class Proceso implements Comparable<Proceso> {
     private int prioridad;
     private EstadoProceso estado;
     private MyList<Evento> eventos;
+    private TipoFinalizacion tipoFinalizacion;
 
     public Proceso(int PID, String nombre, Usuario usuario) {
         this.PID = PID;
@@ -43,7 +44,7 @@ public class Proceso implements Comparable<Proceso> {
     public void setTipoFinalizacion(TipoFinalizacion tipoFinalizacion) {
         this.tipoFinalizacion = tipoFinalizacion;
     }
-    private TipoFinalizacion tipoFinalizacion;
+
 
     public void setPrioridad(int prioridad) {
         this.prioridad = prioridad;

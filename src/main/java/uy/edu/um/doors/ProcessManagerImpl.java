@@ -331,7 +331,7 @@ public class ProcessManagerImpl implements ProcessManager {
                     + " UID:" + enEjecucion.getUsuario().getUID()
                     + " | P=" + enEjecucion.getPrioridad());
         } else {
-            System.out.println("  None");
+            System.out.println("No hay ningun proceso ejecutandose en este momento");
         }
 
         MyList<Proceso> todos = todosProcesos.values();

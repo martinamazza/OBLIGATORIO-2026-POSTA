@@ -64,6 +64,6 @@ public class Proceso implements Comparable<Proceso> {
 
     @Override
     public int compareTo(Proceso otro) {
-        return Integer.compare(otro.getPrioridad(), this.getPrioridad());
+        return Integer.compare(this.getPrioridad(), otro.getPrioridad());
     }
 }

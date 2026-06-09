@@ -11,6 +11,8 @@ import uy.edu.um.tad.queue.MyQueueImpl;
 import uy.edu.um.tad.stack.EmptyStackException;
 import uy.edu.um.tad.stack.MyStack;
 import uy.edu.um.tad.stack.MyStackImpl;
+import uy.edu.um.doors.ProcessAlreadyRunningException;
+import uy.edu.um.doors.NotExistException;
 
 import java.io.*;
 import java.time.LocalDate;
@@ -84,6 +86,12 @@ public class ProcessManagerImpl implements ProcessManager {
             while ((linea = readerProcesos.readLine()) != null) {
                 String[] partes = linea.split(";");
                 int pid = Integer.parseInt(partes[0]);
+
+                // Verificar si el proceso ya existe
+                if (todosProcesos.contains(pid)) {
+                    System.out.println("Error: el proceso con PID=" + pid + " ya existe en el sistema.");
+                    continue;
+                }
                 int uid = Integer.parseInt(partes[1]);
                 String nombre = partes[2];
                 Usuario usuario = usuarios.get(uid);
@@ -173,7 +181,7 @@ public class ProcessManagerImpl implements ProcessManager {
                 pendientes.insert(procesoActual);
 
             } catch (EmptyQueueException e) {
-                throw new RuntimeException(e);
+                System.out.println("Error inesperado: se intentó desencolar de una cola vacía.");
             }
 
         }
@@ -183,12 +191,10 @@ public class ProcessManagerImpl implements ProcessManager {
     @Override
     public void executeNextProcess() {
         if (enEjecucion != null) {
-            System.out.println("Ya hay un proceso en ejecucion: PID=" + enEjecucion.getPID());
-            return;
+            throw new ProcessAlreadyRunningException("Ya hay un proceso en ejecucion: PID=" + enEjecucion.getPID());
         }
         if (pendientes.isEmpty()) {
-            System.out.println("No hay procesos pendientes");
-            return;
+            throw new NotExistException("No hay procesos pendientes.");
         }
         //Agarramos el proceso con mayor prioridad
         Proceso procesoEjecutar = pendientes.remove();
@@ -232,8 +238,7 @@ public class ProcessManagerImpl implements ProcessManager {
     public void finishProcessOk() {
         //Verificamos que haya un proceso en ejecucion
         if (enEjecucion == null) {
-            System.out.println("No hay proceos en ejecucion");
-            return;
+            throw new NotExistException("No hay proceso en ejecucion.");
         }
         enEjecucion.setEstado(EstadoProceso.FINISHED);
         enEjecucion.setTipoFinalizacion(TipoFinalizacion.OK);
@@ -264,8 +269,7 @@ public class ProcessManagerImpl implements ProcessManager {
     public void finishProcessError() {
 
         if (enEjecucion == null) {
-            System.out.println("No hay proceos en ejecucion");
-            return;
+            throw new NotExistException("No hay proceso en ejecucion.");
         }
         enEjecucion.setEstado(EstadoProceso.FINISHED);
         enEjecucion.setTipoFinalizacion(TipoFinalizacion.ERROR);
@@ -294,8 +298,7 @@ public class ProcessManagerImpl implements ProcessManager {
     public void terminateProcess(int uid) {
 
         if (enEjecucion == null) {
-            System.out.println("No hay proceos en ejecucion");
-            return;
+            throw new NotExistException("No hay proceso en ejecucion.");
         }
         enEjecucion.setEstado(EstadoProceso.FINISHED);
         enEjecucion.setTipoFinalizacion(TipoFinalizacion.TERMINATED);
@@ -331,10 +334,13 @@ public class ProcessManagerImpl implements ProcessManager {
                     + " UID:" + enEjecucion.getUsuario().getUID()
                     + " | P=" + enEjecucion.getPrioridad());
         } else {
-            System.out.println("  None");
+            throw new NotExistException("No hay ningun proceso ejecutandose en este momento");
         }
 
         MyList<Proceso> todos = todosProcesos.values();
+        if(todos.isEmpty()){
+            throw new NotExistException("No hay procesos.");
+        }
 
         System.out.println("PENDING:");
         for (int i = 0; i < todos.size(); i++) {
@@ -383,6 +389,9 @@ public class ProcessManagerImpl implements ProcessManager {
         }
 
         MyList<Proceso> todos = todosProcesos.values();
+        if(todos.isEmpty()){
+            throw new NotExistException("No hay procesos.");
+        }
 
         System.out.println("PENDING:");
         for (int i = 0; i < todos.size(); i++) {
@@ -429,10 +438,12 @@ public class ProcessManagerImpl implements ProcessManager {
     public void printStatusByUser(int uid) {
         System.out.println("PROCESS STATUS - USER UID:" + uid);
         MyList<Proceso> todos = todosProcesos.values();
+        if(todos.isEmpty()){
+            throw new NotExistException("No hay procesos.");
+        }
 
         if (!usuarios.contains(uid)) {
-            System.out.println("El usuario ingresado no existe");
-            return;
+            throw new NotExistException("El usuario no existe.");
         }
 
         for (int i = 0; i < todos.size(); i++) {
@@ -459,8 +470,7 @@ public class ProcessManagerImpl implements ProcessManager {
     @Override
     public void printStatusByProcess(int pid) {
         if (!todosProcesos.contains(pid)) {
-            System.out.println("El proceso ingresado no existe en memoria");
-            return;
+            throw new NotExistException("El proceso ingresado no existe en memoria.");
         }
 
         Proceso p = todosProcesos.get(pid);

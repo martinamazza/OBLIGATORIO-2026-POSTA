@@ -297,13 +297,22 @@ public class ProcessManagerImpl implements ProcessManager {
     @Override
     public void terminateProcess(int uid) {
 
-        if (enEjecucion == null) {
+        if(enEjecucion ==null){
             throw new NotExistException("No hay proceso en ejecucion.");
         }
+        if (!usuarios.contains(uid)) {
+            throw new NotExistException("El usuario con UID=" + uid + " no existe.");
+        }
+
+        Usuario usuarioTermina = usuarios.get(uid);
+
         enEjecucion.setEstado(EstadoProceso.FINISHED);
         enEjecucion.setTipoFinalizacion(TipoFinalizacion.TERMINATED);
 
-        String mensaje = "[" + getCurrentTimestamp() + "]: ENDING PROCESS: PID=" + enEjecucion.getPID() + " | STATE: " + enEjecucion.getTipoFinalizacion();
+        String mensaje = "[" + getCurrentTimestamp() + "]: ENDING PROCESS: PID=" + enEjecucion.getPID()
+                + " | STATE: TERMINATED by USER:" + usuarioTermina.getAlias()
+                + " UID:" + usuarioTermina.getUID();
+
         escribirLog(mensaje);
 
         if (finalizados.size() == MAX_CAPACITY_FINISHED) {
@@ -334,13 +343,10 @@ public class ProcessManagerImpl implements ProcessManager {
                     + " UID:" + enEjecucion.getUsuario().getUID()
                     + " | P=" + enEjecucion.getPrioridad());
         } else {
-            throw new NotExistException("No hay ningun proceso ejecutandose en este momento");
+            System.out.println("  None");
         }
 
         MyList<Proceso> todos = todosProcesos.values();
-        if(todos.isEmpty()){
-            throw new NotExistException("No hay procesos.");
-        }
 
         System.out.println("PENDING:");
         for (int i = 0; i < todos.size(); i++) {
@@ -389,9 +395,6 @@ public class ProcessManagerImpl implements ProcessManager {
         }
 
         MyList<Proceso> todos = todosProcesos.values();
-        if(todos.isEmpty()){
-            throw new NotExistException("No hay procesos.");
-        }
 
         System.out.println("PENDING:");
         for (int i = 0; i < todos.size(); i++) {
@@ -436,15 +439,13 @@ public class ProcessManagerImpl implements ProcessManager {
 
     @Override
     public void printStatusByUser(int uid) {
-        System.out.println("PROCESS STATUS - USER UID:" + uid);
-        MyList<Proceso> todos = todosProcesos.values();
-        if(todos.isEmpty()){
-            throw new NotExistException("No hay procesos.");
-        }
 
         if (!usuarios.contains(uid)) {
             throw new NotExistException("El usuario no existe.");
         }
+
+        System.out.println("PROCESS STATUS - USER UID:" + uid);
+        MyList<Proceso> todos = todosProcesos.values();
 
         for (int i = 0; i < todos.size(); i++) {
             Proceso p = todos.get(i);

@@ -64,14 +64,26 @@ public class ProcessManagerImpl implements ProcessManager {
     public void loadProcessAndUserData(String processCsvPath, String usersCsvPath) {
         // PARTE 1: cargar usuarios
         try {
+            // Se abre el archivo CSV de usuarios. FileReader lee del disco y
+            // BufferedReader agrega un buffer en memoria
             BufferedReader readerUsuarios = new BufferedReader(new FileReader(usersCsvPath));
             String linea = readerUsuarios.readLine(); // saltea el encabezado
+
+            //Se lee el archivo línea por línea hasta el final.
+            //readLine() devuelve null cuando no quedan más líneas, y ahí se corta el while
             while ((linea = readerUsuarios.readLine()) != null) {
+
+                // Se separa la línea por el simbolo ";" obteniendo un array
+                // donde cada posición corresponde a una columna del CSV
                 String[] partes = linea.split(";");
-                int uid = Integer.parseInt(partes[0]);
-                String alias = partes[1];
-                TipoUsuario tipo = TipoUsuario.valueOf(partes[2]);
+                // Se convierte cada columna (String) al tipo de dato que corresponde
+                int uid = Integer.parseInt(partes[0]); // columna 0: id del usuario, String -> int
+                String alias = partes[1];   // columna 1: alias, ya es un String
+                TipoUsuario tipo = TipoUsuario.valueOf(partes[2]); // columna 2: String -> constante del enum TipoUsuario
+                // Con los datos ya parseados se crea el objeto Usuario
                 Usuario usuario = new Usuario(uid, alias, tipo);
+                // Se guarda el usuario en el hash usando el uid como clave,
+                // para poder recuperarlo rápido al cargar los procesos
                 usuarios.put(uid, usuario);
             }
             readerUsuarios.close();

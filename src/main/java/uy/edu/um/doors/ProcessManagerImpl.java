@@ -25,6 +25,8 @@ public class ProcessManagerImpl implements ProcessManager {
 
     private MyQueue<Proceso> colaNuevos;
     private MyHeap<Proceso> pendientes;
+
+
     private Proceso enEjecucion;
     private MyStack<Proceso> finalizados;
     private MyHash<Integer, Usuario> usuarios;
@@ -32,6 +34,11 @@ public class ProcessManagerImpl implements ProcessManager {
     private MyHash<Integer, Proceso> todosProcesos;
 
     private BufferedWriter log;
+
+    public Proceso getEnEjecucion() {
+        return enEjecucion;
+    }
+
 
     public ProcessManagerImpl() {
         this.colaNuevos = new MyQueueImpl<>();
